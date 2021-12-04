@@ -27,8 +27,8 @@ class GameState():
     def is_legal(self, move):
         return move in self.legal_moves()
 
-    def filter_legal(self, move):
-        return [m for m in self.legal_moves() if m.startswith(move) or m.endswith(move)]
+    def filter_legal(self, move, isprefix=False):
+        return [m for m in self.legal_moves() if (m.startswith(move) if isprefix else move in m)]
 
     def to_san(self, move=None):
         if move:
@@ -91,13 +91,16 @@ class Board():
     def to_file(file):
         return chr(ord('a') + file)
 
-    def to_square(self, index):
+    def idx2square(self, index):
         return '{}{}'.format(self.to_file(index[1]), self.state.ranks() - index[0])
+
+    def square2idx(self, square):
+        return (self.state.ranks() - int(square[1]), ord(square[0]) - ord('a'))
 
     @staticmethod
     def render_square(key, location):
         square_color = SQUARE_COLORS[(location[0] + location[1]) % 2]
-        button = sg.Button(size=(3, 2), button_color=(PIECE_COLORS[0], square_color), pad=(0, 0), font='Any 20', key=key)
+        button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any 20', key=key)
         return sg.Column([[button]], pad=(0, 0))
 
     def draw_board(self):
@@ -192,12 +195,13 @@ class FairyGUI():
                             pyffish.load_variant_config(variants_ini.read())
                 elif type(button) is tuple or button == '_move_':
                     if move_from or button == '_move_':
-                        move = ''
+                        squares = []
                         if move_from:
-                            move += self.board.to_square(move_from)
+                            squares.append(self.board.idx2square(move_from))
                         if type(button) is tuple:
-                            move += self.board.to_square(button)
-                        moves = self.board.state.filter_legal(move)
+                            squares.append(self.board.idx2square(button))
+                        moves = list(set(self.board.state.filter_legal(''.join(squares))
+                                         + self.board.state.filter_legal(''.join(reversed(squares)))))
                         if len(moves) > 0:
                             if len(moves) > 1:
                                 moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
@@ -207,8 +211,17 @@ class FairyGUI():
                         move_from = None
                         self.board.update_board(self.window)
                     else:
-                        move_from = button
-                        self.window[move_from].update(button_color=('white', 'red'))
+                        moves = self.board.state.filter_legal(self.board.idx2square(button))
+                        if moves:
+                            for move in moves:
+                                if '@' not in move:
+                                    to_sq = self.board.square2idx(move[0:2])
+                                    self.window[to_sq].update(button_color='cyan')
+                            move_from = button
+                            self.window[move_from].update(button_color='green')
+                            for move in self.board.state.filter_legal(self.board.idx2square(button), True):
+                                to_sq = self.board.square2idx(move[2:4])
+                                self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
 
 
 if __name__ == '__main__':
