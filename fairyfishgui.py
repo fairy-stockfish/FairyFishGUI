@@ -129,9 +129,9 @@ class FairyGUI():
 
         sg.ChangeLookAndFeel('GreenTan')
 
-        board_controls = [[sg.Button('New Game', key='_newgame_'), sg.Button('Set FEN', key='_fen_')],
+        board_controls = [[sg.Button('New Game', key='_newgame_'), sg.Button('Load variants', key='_variants_')],
+                        [sg.Button('Set FEN', key='_set_fen_'), sg.Button('Reset', key='_reset_')],
                         [sg.Button('Move', key='_move_'), sg.Button('Undo', key='_undo_')],
-                        [sg.Button('Load variants', key='_variants_')],
                         [sg.Text('Move List')],
                         [sg.Multiline(do_not_clear=True, autoscroll=True, size=(15, 10), key='_movelist_')],
                         ]
@@ -173,16 +173,19 @@ class FairyGUI():
                     if variant:
                         self.board.state = GameState(variant[0])
                         break
-                elif button == '_fen_':
-                    fen = self.popup(sg.Input, 'FEN', '', size=(30, 20))
+                elif button == '_set_fen_':
+                    fen = sg.popup_get_text('Set FEN', default_text=self.board.state.fen(), size=(80, 20))
                     if fen:
                         self.board.state = GameState(self.board.state.variant, fen)
                         break
+                elif button == '_reset_':
+                    self.board.state = GameState(self.board.state.variant)
+                    break
                 elif button == '_undo_':
                     self.board.state.pop()
                     self.board.update_board(self.window)
                 elif button == '_variants_':
-                    variant_path = sg.PopupGetFile('Select variants.ini',
+                    variant_path = sg.popup_get_file('Select variants.ini',
                                                file_types=(('variant configuration file', '*.ini'),))
                     if variant_path:
                         with open(variant_path) as variants_ini:
