@@ -113,6 +113,7 @@ class Board():
         return board_layout
 
     def update_board(self, window):
+        self.current_selection = None
         char_board = self.state.char_board()
         for i in range(MAX_RANKS):
             for j in range(MAX_FILES):
@@ -141,6 +142,7 @@ class FairyGUI():
 
         self.board = Board()
         board_tab = [[sg.Column(self.board.draw_board())]]
+        self.current_selection = None
 
         layout = [[sg.Menu(menu_def, tearoff=False)],
                 [sg.TabGroup([[sg.Tab('Board', board_tab)]], title_color='red'),
@@ -162,11 +164,36 @@ class FairyGUI():
                         return values['entry']
                     return
 
+    def process_square(self, button):
+        if self.current_selection or button == '_move_':
+            squares = [self.board.idx2square(square) for square in (self.current_selection, button) if type(square) is tuple]
+            moves = list(set(self.board.state.filter_legal(''.join(squares))
+                                + self.board.state.filter_legal(''.join(reversed(squares)))))
+            if len(moves) > 0:
+                if len(moves) > 1:
+                    moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
+                if moves:
+                    move = moves[0]
+                    self.board.state.push(move)
+            self.board.update_board(self.window)
+            self.current_selection = None
+        else:
+            moves = self.board.state.filter_legal(self.board.idx2square(button))
+            if moves:
+                for move in moves:
+                    if '@' not in move:
+                        to_sq = self.board.square2idx(move[0:2])
+                        self.window[to_sq].update(button_color='cyan')
+                self.window[button].update(button_color='green')
+                for move in self.board.state.filter_legal(self.board.idx2square(button), True):
+                    to_sq = self.board.square2idx(move[2:4])
+                    self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
+            self.current_selection = button
+
     def run(self):
         self.window.finalize()
         while True:
             self.board.update_board(self.window)
-            move_from = None
             while True:
                 button, value = self.window.Read()
                 if button in (None, 'Exit'):
@@ -194,34 +221,7 @@ class FairyGUI():
                         with open(variant_path) as variants_ini:
                             pyffish.load_variant_config(variants_ini.read())
                 elif type(button) is tuple or button == '_move_':
-                    if move_from or button == '_move_':
-                        squares = []
-                        if move_from:
-                            squares.append(self.board.idx2square(move_from))
-                        if type(button) is tuple:
-                            squares.append(self.board.idx2square(button))
-                        moves = list(set(self.board.state.filter_legal(''.join(squares))
-                                         + self.board.state.filter_legal(''.join(reversed(squares)))))
-                        if len(moves) > 0:
-                            if len(moves) > 1:
-                                moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
-                            if moves:
-                                move = moves[0]
-                                self.board.state.push(move)
-                        move_from = None
-                        self.board.update_board(self.window)
-                    else:
-                        moves = self.board.state.filter_legal(self.board.idx2square(button))
-                        if moves:
-                            for move in moves:
-                                if '@' not in move:
-                                    to_sq = self.board.square2idx(move[0:2])
-                                    self.window[to_sq].update(button_color='cyan')
-                            move_from = button
-                            self.window[move_from].update(button_color='green')
-                            for move in self.board.state.filter_legal(self.board.idx2square(button), True):
-                                to_sq = self.board.square2idx(move[2:4])
-                                self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
+                    self.process_square(button)
 
 
 if __name__ == '__main__':
