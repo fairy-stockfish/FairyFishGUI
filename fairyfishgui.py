@@ -131,6 +131,7 @@ class FairyGUI():
 
         board_controls = [[sg.Button('New Game', key='_newgame_'), sg.Button('Set FEN', key='_fen_')],
                         [sg.Button('Move', key='_move_'), sg.Button('Undo', key='_undo_')],
+                        [sg.Button('Load variants', key='_variants_')],
                         [sg.Text('Move List')],
                         [sg.Multiline(do_not_clear=True, autoscroll=True, size=(15, 10), key='_movelist_')],
                         ]
@@ -180,6 +181,12 @@ class FairyGUI():
                 elif button == '_undo_':
                     self.board.state.pop()
                     self.board.update_board(self.window)
+                elif button == '_variants_':
+                    variant_path = sg.PopupGetFile('Select variants.ini',
+                                               file_types=(('variant configuration file', '*.ini'),))
+                    if variant_path:
+                        with open(variant_path) as variants_ini:
+                            pyffish.load_variant_config(variants_ini.read())
                 elif type(button) is tuple or button == '_move_':
                     if move_from or button == '_move_':
                         move = ''
