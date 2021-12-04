@@ -27,8 +27,8 @@ class GameState():
     def is_legal(self, move):
         return move in self.legal_moves()
 
-    def filter_legal(self, move, isprefix=False):
-        return [m for m in self.legal_moves() if (m.startswith(move) if isprefix else move in m)]
+    def filter_legal(self, move):
+        return [m for m in self.legal_moves() if not move or (move in m and move + '0' not in m)]  # workaround for rank 10
 
     def to_san(self, move=None):
         if move:
@@ -95,7 +95,7 @@ class Board():
         return '{}{}'.format(self.to_file(index[1]), self.state.ranks() - index[0])
 
     def square2idx(self, square):
-        return (self.state.ranks() - int(square[1]), ord(square[0]) - ord('a'))
+        return (self.state.ranks() - int(square[1:]), ord(square[0]) - ord('a'))
 
     @staticmethod
     def render_square(key, location):
@@ -181,14 +181,14 @@ class FairyGUI():
             moves = self.board.state.filter_legal(self.board.idx2square(button))
             if moves:
                 for move in moves:
+                    to_sq = self.board.square2idx(move[2 + move[2].isdigit():len(move) - (not move[-1].isdigit())])
+                    self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
+                for move in moves:
                     if '@' not in move:
-                        to_sq = self.board.square2idx(move[0:2])
+                        to_sq = self.board.square2idx(move[0:2 + move[2].isdigit()])
                         self.window[to_sq].update(button_color='cyan')
                 self.window[button].update(button_color='green')
-                for move in self.board.state.filter_legal(self.board.idx2square(button), True):
-                    to_sq = self.board.square2idx(move[2:4])
-                    self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
-            self.current_selection = button
+                self.current_selection = button
 
     def run(self):
         self.window.finalize()
