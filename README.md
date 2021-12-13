@@ -4,13 +4,19 @@ Minimalistic generic chess variant GUI using [pyffish](https://pypi.org/project/
 
 For well-known variants better use more polished GUIs like [LiGround](https://github.com/ml-research/liground). This project is meant as a fallback for variants where no other compatible GUI is available.
 
-## Installation
+## Usage
+
+For Windows you can download the EXE from the latest run of the [build action](https://github.com/ianfab/FairyFishGUI/actions/workflows/build.yml). For Unix systems you can use the development setup as described below.
+
+## Development
+
+### Requirements
 
 Install dependencies (e.g., in a virtualenv) using pip
 
     pip3 install -r requirements.txt
 
-## Run
+### Run
 
 To start the GUI, run
 
