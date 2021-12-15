@@ -101,7 +101,7 @@ class Board():
     def render_square(key, location):
         square_color = SQUARE_COLORS[(location[0] + location[1]) % 2]
         button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any 20', key=key)
-        return sg.Column([[button]], pad=(0, 0))
+        return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
 
     def draw_board(self):
         board_layout = []
@@ -118,12 +118,14 @@ class Board():
         for i in range(MAX_RANKS):
             for j in range(MAX_FILES):
                 elem = window[(i, j)]
+                col = window[('col', i, j)]
                 if i >= self.state.ranks() or j >= self.state.files():
-                    elem.update(visible=False)
+                    col.update(visible=False)
                 else:
                     square_color = SQUARE_COLORS[(i + j) % 2]
                     piece = char_board[i][j]
-                    elem.update(visible=True, text=piece, button_color=(PIECE_COLORS[piece.islower()], square_color))
+                    elem.update(text=piece, button_color=(PIECE_COLORS[piece.islower()], square_color))
+                    col.update(visible=True)
         window['_movelist_'].update(' '.join(self.state.to_san()))
 
 
