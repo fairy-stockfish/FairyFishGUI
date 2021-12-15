@@ -100,7 +100,8 @@ class Board():
     @staticmethod
     def render_square(key, location):
         square_color = SQUARE_COLORS[(location[0] + location[1]) % 2]
-        button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any 20', key=key)
+        font_size = min(sg.Window.get_screen_size()) // 50
+        button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any {}'.format(font_size), key=key)
         return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
 
     def draw_board(self):
