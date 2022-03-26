@@ -4,7 +4,7 @@ block_cipher = None
 
 
 a = Analysis(['fairyfishgui.py'],
-             pathex=['/home/fabi/projects/FairyFishGUI'],
+             pathex=[],
              binaries=[],
              datas=[],
              hiddenimports=[],
