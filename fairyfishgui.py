@@ -213,13 +213,16 @@ class FairyGUI():
         sg.ChangeLookAndFeel('GreenTan')
 
         board_controls = [[sg.Button('New Game', key='_newgame_'), sg.Button('Load variants', key='_variants_')],
-                        [sg.Button('Load engine', key='_engine_'), sg.Button('Engine on/off', key='_toggle_')],
                         [sg.Button('Set FEN', key='_set_fen_'), sg.Button('Reset', key='_reset_')],
-                        [sg.Button('Move', key='_move_'), sg.Button('Undo', key='_undo_')],
+                        [sg.Text('Custom variant')],
+                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(30, 8), key='_variant_')],
+                        [sg.Button('Load', key='_load_'), sg.Button('Check', key='_check_')],
                         [sg.Text('Move List')],
-                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_movelist_')],
+                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(30, 8), key='_movelist_')],
+                        [sg.Button('Move', key='_move_'), sg.Button('Undo', key='_undo_')],
                         [sg.Text('Engine Output')],
-                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_engine_output_')],
+                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(30, 8), key='_engine_output_')],
+                        [sg.Button('Load engine', key='_engine_'), sg.Button('Engine on/off', key='_toggle_')],
                         ]
 
         self.board = Board()
@@ -361,6 +364,13 @@ class FairyGUI():
                         pyffish.load_variant_config(variants_ini.read())
                     if self.engine:
                         self.engine.setoption('VariantPath', variant_path)
+            elif button == '_load_':
+                pyffish.load_variant_config(value['_variant_'])
+                if self.engine:
+                    self.engine.write('load <<EOFVARIANTEND\n{}\nEOFVARIANTEND'.format(value['_variant_']))
+            elif button == '_check_':
+                if self.engine:
+                    self.engine.write('check <<EOFVARIANTEND\n{}\nEOFVARIANTEND'.format(value['_variant_']))
             elif button == '_engine_':
                 engine_path = sg.popup_get_file('Select engine')
                 if engine_path:
