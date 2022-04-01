@@ -359,6 +359,8 @@ class FairyGUI():
                 if variant_path:
                     with open(variant_path) as variants_ini:
                         pyffish.load_variant_config(variants_ini.read())
+                    if self.engine:
+                        self.engine.setoption('VariantPath', variant_path)
             elif button == '_engine_':
                 engine_path = sg.popup_get_file('Select engine')
                 if engine_path:
