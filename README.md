@@ -8,7 +8,7 @@ For well-known variants better use more polished GUIs like [LiGround](https://gi
 
 ## Usage
 
-For Windows you can download the EXE from the latest run of the [build action](https://github.com/ianfab/FairyFishGUI/actions/workflows/build.yml). For Unix systems you can use the development setup as described below.
+For Windows you can download the EXE from the latest run of the [build action](https://github.com/ianfab/FairyFishGUI/actions/workflows/build.yml) (requires logging in to github). For Unix systems you can use the development setup as described below.
 
 ## Development
 
