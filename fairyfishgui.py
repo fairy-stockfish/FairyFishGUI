@@ -85,6 +85,7 @@ class Engine():
             return info
         return None
 
+
 class GameState():
     def __init__(self, variant="chess", start_fen=None, moves=None):
         self.variant = variant
@@ -177,7 +178,7 @@ class Board():
     def render_square(key, location):
         square_color = SQUARE_COLORS[(location[0] + location[1]) % 2]
         font_size = min(sg.Window.get_screen_size()) // 50
-        button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any {}'.format(font_size), key=key)
+        button = sg.Button(size=(4, 2), button_color=square_color, pad=(0, 0), font='Any {}'.format(font_size), key=key)
         return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
 
     def draw_board(self):
@@ -213,14 +214,15 @@ class FairyGUI():
         sg.ChangeLookAndFeel('GreenTan')
 
         board_controls = [[sg.Button('New Game', key='_newgame_'), sg.Button('Load variants', key='_variants_')],
-                        [sg.Button('Load engine', key='_engine_'), sg.Button('Engine on/off', key='_toggle_')],
-                        [sg.Button('Set FEN', key='_set_fen_'), sg.Button('Reset', key='_reset_')],
-                        [sg.Button('Move', key='_move_'), sg.Button('Undo', key='_undo_')],
-                        [sg.Text('Move List')],
-                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_movelist_')],
-                        [sg.Text('Engine Output')],
-                        [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_engine_output_')],
-                        ]
+                          [sg.Button('Load engine', key='_engine_'), sg.Button('Engine on/off', key='_toggle_')],
+                          [sg.Button('Load NNUE', key='_nnue_'), sg.Button('Set Threads',key='_thread_')],
+                          [sg.Button('Set FEN', key='_set_fen_'),sg.Button('Reset', key='_reset_')],
+                          [sg.Button('Move', key='_move_'),sg.Button('Undo', key='_undo_')],
+                          [sg.Text('Move List')],
+                          [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_movelist_')],
+                          [sg.Text('Engine Output')],
+                          [sg.Multiline(do_not_clear=True, autoscroll=True, size=(25, 10), key='_engine_output_')],
+                          ]
 
         self.board = Board()
         board_tab = [[sg.Column(self.board.draw_board())]]
@@ -229,13 +231,13 @@ class FairyGUI():
         self.engine_thread = None
 
         layout = [[sg.Menu(menu_def, tearoff=False)],
-                [sg.TabGroup([[sg.Tab('Board', board_tab)]], title_color='red'),
-                sg.Column(board_controls)]]
+                  [sg.TabGroup([[sg.Tab('Board', board_tab)]], title_color='red'),
+                   sg.Column(board_controls)]]
 
         self.window = sg.Window('FairyFishGUI',
-                        default_button_element_size=(12, 1),
-                        auto_size_buttons=False,
-                        resizable=True).Layout(layout)
+                                default_button_element_size=(12, 1),
+                                auto_size_buttons=False,
+                                resizable=True).Layout(layout)
 
     @staticmethod
     def popup(element, header, data, **kwargs):
@@ -264,7 +266,7 @@ class FairyGUI():
             moves = self.board.state.filter_legal(self.board.idx2square(button))
             if moves:
                 for move in moves:
-                    move = move.split(',')[0] # support multi-leg moves
+                    move = move.split(',')[0] # support multi-leg movesmove = move.split(',')[0] # support multi-leg moves
                     to_sq = self.board.square2idx(move[2 + move[2].isdigit():len(move) - (not move[-1].isdigit())])
                     self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                 for move in moves:
@@ -303,8 +305,8 @@ class FairyGUI():
         self.engine.position(self.board.state.start_fen, self.board.state.moves)
         self.engine.analyze()
 
-    def update_board(self, variant=None, fen=None, move=None, undo=False):
-        if self.engine and not self.engine.paused and (variant or fen or move or undo):
+    def update_board(self, variant=None, fen=None, move=None, undo=False, nnue=None, threads=None):
+        if self.engine and not self.engine.paused and (variant or fen or move or undo or nnue or threads):
             self.engine.stop()
             self.engine.paused = False
 
@@ -321,13 +323,26 @@ class FairyGUI():
         if move:
             self.board.state.push(move)
             if self.engine:
-                self.engine.position(self.board.state.start_fen, self.board.state.moves)
+                self.engine.position(
+                    self.board.state.start_fen, self.board.state.moves)
         if undo:
             self.board.state.pop()
             if self.engine:
+                self.engine.position(
+                    self.board.state.start_fen, self.board.state.moves)
+        if nnue:
+            if self.engine:
+                self.engine.setoption('EvalFile',nnue)
+                self.engine.newgame()
                 self.engine.position(self.board.state.start_fen, self.board.state.moves)
 
-        if self.engine and not self.engine.paused and (variant or fen or move or undo):
+        if threads:
+            if self.engine:
+                self.engine.setoption('Threads',threads)
+                self.engine.newgame()
+                self.engine.position(self.board.state.start_fen, self.board.state.moves)
+                
+        if self.engine and not self.engine.paused and (variant or fen or move or undo or nnue or threads):
             self.engine.analyze()
 
         self.board.update(self.window)
@@ -355,8 +370,7 @@ class FairyGUI():
             elif button == '_undo_':
                 self.update_board(undo=True)
             elif button == '_variants_':
-                variant_path = sg.popup_get_file('Select variants.ini',
-                                            file_types=(('variant configuration file', '*.ini'),))
+                variant_path = sg.popup_get_file('Select variants.ini', file_types=(('variant configuration file', '*.ini'),))
                 if variant_path:
                     with open(variant_path) as variants_ini:
                         pyffish.load_variant_config(variants_ini.read())
@@ -373,7 +387,25 @@ class FairyGUI():
                 move = self.process_square(button)
                 if move:
                     self.update_board(move=move)
-
+            elif button == '_nnue_':
+                if not self.engine:
+                    sg.popup_ok('Please load the engine first')
+                else:
+                    nnue_path = sg.popup_get_file('Select NNUE',file_types=(('nnue file', '*.nnue'),))
+                    if nnue_path:
+                        if not (nnue_path.split('/')[-1].startswith(self.board.state.variant) if self.board.state.variant != 'chess' else nnue_path.split('/')[-1].startswith('nn')):
+                            sg.popup_ok('Please select the right NNUE file')
+                        else:
+                            self.update_board(nnue=nnue_path)
+            elif button == '_thread_':
+                if not self.engine:
+                    sg.popup_ok('Please load the engine first')
+                else:
+                    threads = sg.popup_get_text('The number of CPU threads used for searching a position')
+                    if threads.isdigit():
+                        self.update_board(threads=int(threads))
+                    elif threads:
+                        sg.popup_ok('Threads should be a positive integer')	
 
 if __name__ == '__main__':
     FairyGUI().run()
