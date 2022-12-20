@@ -328,8 +328,8 @@ class FairyGUI():
         if undo:
             self.board.state.pop()
             if self.engine:
-                self.engine.position(
-                    self.board.state.start_fen, self.board.state.moves)
+                self.engine.position(self.board.state.start_fen, self.board.state.moves)
+				
         if nnue:
             if self.engine:
                 self.engine.setoption('EvalFile',nnue)
