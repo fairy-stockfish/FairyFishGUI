@@ -266,7 +266,7 @@ class FairyGUI():
             moves = self.board.state.filter_legal(self.board.idx2square(button))
             if moves:
                 for move in moves:
-                    move = move.split(',')[0] # support multi-leg movesmove = move.split(',')[0] # support multi-leg moves
+                    move = move.split(',')[0] # support multi-leg moves
                     to_sq = self.board.square2idx(move[2 + move[2].isdigit():len(move) - (not move[-1].isdigit())])
                     self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                 for move in moves:
