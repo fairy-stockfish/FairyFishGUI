@@ -227,8 +227,7 @@ class FairyGUI():
         self.current_selection = None
         self.engine = None
         self.engine_thread = None
-        self.nnue = ''
-        self.threads = ''
+        self.engine_settings = {'EvalFile':'','Threads':''} 
 
         layout = [[sg.Menu(menu_def, tearoff=False)],
                   [sg.TabGroup([[sg.Tab('Board', board_tab)]], title_color='red'),
@@ -303,7 +302,7 @@ class FairyGUI():
 
     def load_engine(self, engine_path):
         self.quit_engine()
-        self.engine = Engine([engine_path], options={'EvalFile':self.nnue,'Threads':self.threads})
+        self.engine = Engine([engine_path], options=self.engine_settings)
         def read_output():
             def format_score(score):
                 return '#{}'.format(score[1]) if score[0] == 'mate' else '{:.2f}'.format(int(score[1]) / 100) if score[0] == 'cp' else None
@@ -335,12 +334,12 @@ class FairyGUI():
             if self.engine:
                 self.engine.setoption('EvalFile',nnue)
             else:
-                self.nnue = nnue
+                self.engine_settings['EvalFiles'] = nnue
         if threads:
             if self.engine:
                 self.engine.setoption('Threads',threads)
             else:
-                self.threads = threads
+                self.engine_settings['Threads'] = threads
         if self.engine and not self.engine.paused and (nnue or threads):
             self.engine.analyze()
 
