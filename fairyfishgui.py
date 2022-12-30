@@ -334,7 +334,7 @@ class FairyGUI():
             if self.engine:
                 self.engine.setoption('EvalFile',nnue)
             else:
-                self.engine_settings['EvalFiles'] = nnue
+                self.engine_settings['EvalFile'] = nnue
         if threads:
             if self.engine:
                 self.engine.setoption('Threads',threads)
