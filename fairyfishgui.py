@@ -108,7 +108,7 @@ class GameState():
         return move in self.legal_moves()
 
     def filter_legal(self, move):
-        return [m for m in self.legal_moves() if not move or (move in m and move + '0' not in m) ]  # workaround for rank 10
+        return [m for m in self.legal_moves() if not move or (move in m and move + '0' not in m)]  # workaround for rank 10
 
     def to_san(self, move=None):
         if move:
