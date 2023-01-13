@@ -126,7 +126,7 @@ class GameState():
                 count += int(c)
                 if last_char.isdigit():
                     count += 9 * int(last_char)
-            elif c.isalpha():
+            elif c.isalpha() or c == '*':
                 count += 1
             last_char = c
         return count
