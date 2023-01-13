@@ -1,4 +1,4 @@
-from collections import defaultdict,OrderedDict
+from collections import OrderedDict
 from collections.abc import Iterable
 from contextlib import closing
 import subprocess
@@ -156,6 +156,10 @@ class GameState():
                     rank += 9 * int(lastchar) * [' ']
             elif c == '+':
                 prefix = c
+            elif c == '~':
+                prefix = ''
+                lastchar = ''
+                continue
             else:
                 rank.append(prefix + c)
                 prefix = ''
@@ -168,18 +172,13 @@ class GameState():
                 self.pockets[pocket][piece] = 0
         white_pocket = []
         black_pocket = []
-        pocket_pieces = re.findall(r"\[(.*)\]",self.fen())
+        pocket_pieces = re.findall(r"\[(.*)\]", self.fen())
         if pocket_pieces:
-            prefix = ''
             for i in pocket_pieces[0]:
-                if i == '+':
-                    prefix = i
+                if i.isupper():
+                    white_pocket.append(i)
                 else:
-                    if i.isupper():
-                        white_pocket.append(prefix + i)
-                    else:
-                        black_pocket.append(prefix + i)
-                    prefix = ''
+                    black_pocket.append(i)
         
         for piece in white_pocket:		
             self.pockets['white_pocket'][piece] = white_pocket.count(piece)
