@@ -11,9 +11,15 @@ import pyffish
 
 MAX_FILES = 12
 MAX_RANKS = 10
+WHITE, BLACK = 0, 1
+POCKETS = {WHITE: 'white_pocket', BLACK: 'black_pocket'}
 SQUARE_COLORS = ('#F0D9B5', '#B58863', '#808080', '#9FB8AD')  # light, dark, wall, pocket
 PIECE_COLORS = ('white', 'black')
 WALL_CHAR = '*'
+
+
+def piece_color(piece):
+    return piece.islower()
 
 
 class Engine():
@@ -94,11 +100,15 @@ class GameState():
         self.variant = variant
         self.start_fen = start_fen if start_fen else pyffish.start_fen(variant)
         self.moves = moves if moves else []
-        self.pockets = {'white_pocket': OrderedDict(), 'black_pocket': OrderedDict()}
         # OrderedDict here to store the order of the captured pieces, 
         # so that the pocket won't vary for each update
+        self.pockets = {WHITE: OrderedDict(), BLACK: OrderedDict()}
+
     def fen(self):
         return pyffish.get_fen(self.variant, self.start_fen, self.moves)
+
+    def side_to_move(self):
+        return int(self.fen().split()[1] == 'b')
 
     def legal_moves(self):
         return pyffish.legal_moves(self.variant, self.start_fen, self.moves)
@@ -169,14 +179,17 @@ class GameState():
         return board
 
     def update_pockets(self):
-        for pocket in self.pockets:		# clear all the pocket pieces; remain the keys
-            for piece in self.pockets[pocket]:
-                self.pockets[pocket][piece] = 0
+        # clear all the pocket pieces, keep the keys
+        for pocket in self.pockets.values():
+            for piece in pocket:
+                pocket[piece] = 0
+
+        # determine new counts
         pocket_pieces = re.findall(r"\[(.*)\]", self.fen())
         pocket_counts = Counter(pocket_pieces[0] if pocket_pieces else '')
 
         for piece, count in pocket_counts.items():
-            self.pockets['white_pocket' if piece.isupper() else 'black_pocket'][piece] = count
+            self.pockets[piece_color(piece)][piece] = count
 
 
 class Board():
@@ -194,16 +207,16 @@ class Board():
         return (self.state.ranks() - int(square[1:]), ord(square[0]) - ord('a'))
 
     @staticmethod
-    def render_square(key, location=None, pocket_color=False):
+    def render_square(key, pocket_color=None):
         font_size = min(sg.Window.get_screen_size()) // 50
-        if not pocket_color:                  
-            square_color = SQUARE_COLORS[(location[0] + location[1]) % 2]
-            button = sg.Button(size=(3, 2), button_color=square_color, pad=(0, 0), font='Any {}'.format(font_size), key=key)
+        if pocket_color is None:
+            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
             return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
         else:
-            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=(pocket_color,) + key)      
-            piece_count = sg.Text(size=(1,1), pad=(0,0), text_color='red', font='Any {}'.format(12), key=(pocket_color + '_count',) + key)                                      
-            return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=(pocket_color+'_col',) + key))  
+            pocket = POCKETS[pocket_color]
+            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=(pocket,) + key)
+            piece_count = sg.Text(size=(1, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=(pocket + '_count',) + key)
+            return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=(pocket + '_col',) + key))
 
             # +---+---+---+---+
             # | P | N |   | R |
@@ -216,11 +229,11 @@ class Board():
         for i in range(MAX_RANKS):
             row = []
             for j in range(MAX_FILES):
-                row.append(self.render_square(key=(i, j), location=(i, j)))
+                row.append(self.render_square(key=(i, j)))
             board_layout.append(row)
         return board_layout
 
-    def draw_pockets(self,pocket_color):
+    def draw_pocket(self, pocket_color):
         pocket_layout = []
         for i in range(MAX_FILES):
             pocket_layout.append(self.render_square(key=(i,), pocket_color=pocket_color))
@@ -243,7 +256,8 @@ class Board():
                     col.update(visible=True)
 
         # update pocket
-        for pocket, pieces in self.state.pockets.items():
+        for color, pieces in self.state.pockets.items():
+            pocket = POCKETS[color]
             for i in range(MAX_FILES):
                 elem = window[(pocket, i)]
                 num = window[(pocket + '_count', i)]
@@ -279,7 +293,7 @@ class FairyGUI():
                           ]
 
         self.board = Board()
-        board_tab = [[sg.Column([self.board.draw_pockets('black_pocket')])], [sg.Column(self.board.draw_board())],[sg.Column([self.board.draw_pockets('white_pocket')])]]
+        board_tab = [[sg.Column([self.board.draw_pocket(BLACK)])], [sg.Column(self.board.draw_board())],[sg.Column([self.board.draw_pocket(WHITE)])]]
         self.current_selection = None
         self.engine = None
         self.engine_thread = None
@@ -304,6 +318,7 @@ class FairyGUI():
                     if values and values['entry']:
                         return values['entry']
                     return
+
     @staticmethod
     def engine_settings_panel():
         layout = [[sg.Text('Chose NNUE file:')],
@@ -320,7 +335,7 @@ class FairyGUI():
                             sg.popup_ok('Threads should be a positive integer')
                             continue
                         else:
-                            for k in values:           # values might be NoneTypes
+                            for k in values:  # values might be NoneTypes
                                 if not values[k]:
                                     values[k] = None
                             return values
@@ -328,17 +343,17 @@ class FairyGUI():
 
     def process_square(self, button):
         if self.current_selection or button == '_move_':
-            if button[0] in ('white_pocket', 'black_pocket'):    # invalid click
+            if button[0] in POCKETS.values():  # invalid click
                 self.current_selection = None
                 self.update_board()
                 return	
-            elif not self.current_selection:    # clicking on Move without selection
+            elif not self.current_selection:  # clicking on Move without selection
                 moves = self.board.state.filter_legal('')
-            elif self.current_selection[0] not in ('white_pocket', 'black_pocket'):    # current_selection is (i,j)
+            elif self.current_selection[0] not in POCKETS.values():  # current_selection is (i,j)
                 squares = [self.board.idx2square(square) for square in (self.current_selection, button) if type(square) is tuple]
                 moves = list(set(self.board.state.filter_legal(''.join(squares))
                                     + self.board.state.filter_legal(''.join(reversed(squares)))))	
-            else: 	# current_selection is pocket piece
+            else:  # current_selection is pocket piece
                 squares = [self.window[self.current_selection].get_text().upper() + '@', self.board.idx2square(button) if type(button) is tuple else '']
                 moves = self.board.state.filter_legal(''.join(squares))
             self.current_selection = None
@@ -351,11 +366,11 @@ class FairyGUI():
             self.update_board()
 
         else:
-            if button[0] not in ('white_pocket', 'black_pocket'):    # button = (i,j)
+            if button[0] not in POCKETS.values():  # button = (i,j)
                 moves = self.board.state.filter_legal(self.board.idx2square(button))
                 if moves:
                     for move in moves:
-                        move = move.split(',')[0] # support multi-leg moves
+                        move = move.split(',')[0]  # support multi-leg moves
                         to_sq = self.board.square2idx(move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())])
                         self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                     for move in moves:
@@ -364,14 +379,13 @@ class FairyGUI():
                             self.window[to_sq].update(button_color='cyan')
                     self.window[button].update(button_color='green')
                     self.current_selection = button
-            else:	# button = ('...pocket',i)
-                color_checker = {0: 'white_pocket', 1: 'black_pocket'}
-                if button[0] == color_checker[len(self.board.state.moves)%2]:    # as in UCI there's no difference between black or white for drop pieces
+            else:  # button = ('...pocket', i)
+                if button[0] == POCKETS[self.board.state.side_to_move()]:  # as in UCI there's no difference between black or white for drop pieces
                     piece = self.window[button].get_text().upper()
                     moves = self.board.state.filter_legal(piece + '@')
                     if moves:
                         for move in moves:
-                            move = move.split(',')[0] # support multi-leg moves
+                            move = move.split(',')[0]  # support multi-leg moves
                             to_sq = self.board.square2idx(move[2: len(move) - (not move[-1].isdigit())])
                             self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                         self.window[button].update(button_color='green')
