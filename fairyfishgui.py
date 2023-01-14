@@ -1,17 +1,19 @@
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from collections.abc import Iterable
 from contextlib import closing
 import subprocess
 import threading
+import re
+
 import PySimpleGUI as sg
 import pyffish
-import re
 
 
 MAX_FILES = 12
 MAX_RANKS = 10
-SQUARE_COLORS = ('#F0D9B5', '#B58863')
+SQUARE_COLORS = ('#F0D9B5', '#B58863', '#808080', '#9FB8AD')  # light, dark, wall, pocket
 PIECE_COLORS = ('white', 'black')
+WALL_CHAR = '*'
 
 
 class Engine():
@@ -130,7 +132,7 @@ class GameState():
                 count += int(c)
                 if last_char.isdigit():
                     count += 9 * int(last_char)
-            elif c.isalpha() or c == '*':
+            elif c.isalpha() or c in WALL_CHAR:
                 count += 1
             last_char = c
         return count
@@ -170,21 +172,11 @@ class GameState():
         for pocket in self.pockets:		# clear all the pocket pieces; remain the keys
             for piece in self.pockets[pocket]:
                 self.pockets[pocket][piece] = 0
-        white_pocket = []
-        black_pocket = []
         pocket_pieces = re.findall(r"\[(.*)\]", self.fen())
-        if pocket_pieces:
-            for i in pocket_pieces[0]:
-                if i.isupper():
-                    white_pocket.append(i)
-                else:
-                    black_pocket.append(i)
-        
-        for piece in white_pocket:		
-            self.pockets['white_pocket'][piece] = white_pocket.count(piece)
-        for piece in black_pocket:
-            self.pockets['black_pocket'][piece] = black_pocket.count(piece)
-        
+        pocket_counts = Counter(pocket_pieces[0] if pocket_pieces else '')
+
+        for piece, count in pocket_counts.items():
+            self.pockets['white_pocket' if piece.isupper() else 'black_pocket'][piece] = count
 
 
 class Board():
@@ -244,9 +236,10 @@ class Board():
                 if i >= self.state.ranks() or j >= self.state.files():
                     col.update(visible=False)
                 else:
-                    square_color = SQUARE_COLORS[(i + j) % 2]
                     piece = char_board[i][j]
-                    elem.update(text=piece, button_color=(PIECE_COLORS[piece.islower()], square_color))
+                    piece_color = PIECE_COLORS[piece.islower()]
+                    square_color = SQUARE_COLORS[(i + j) % 2 if piece not in WALL_CHAR else 2]
+                    elem.update(text=piece if piece not in WALL_CHAR else '', button_color=(piece_color, square_color))
                     col.update(visible=True)
 
         # update pocket
@@ -260,7 +253,7 @@ class Board():
                 else:		# type(pieces) = OrderedDict
                     piece, piece_count = list(pieces.items())[i][0], list(pieces.items())[i][1]
                     if piece_count > 0:
-                        elem.update(text=piece, visible=True, button_color=(PIECE_COLORS[piece.islower()], '#9FB8AD'))
+                        elem.update(text=piece, visible=True, button_color=(PIECE_COLORS[piece.islower()], SQUARE_COLORS[3]))
                         num.update(piece_count, visible=True)
                         col.update(visible=True)
                     else:	
