@@ -22,6 +22,19 @@ def piece_color(piece):
     return piece.islower()
 
 
+class Move(str):
+    def from_sq(self):
+        move = self.lstrip('+')
+        return move[0: 2 + move[2].isdigit()]
+    def to_sq(self):
+        move = self.lstrip('+').split(',')[0]  # support multi-leg moves
+        return move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())]
+    def gating_sq(self):
+        assert ',' in self
+        move = self.split(',')[1]
+        return move[-(2 + move[-2].isdigit()):]
+
+
 class Engine():
     INFO_KEYWORDS = {'depth': int, 'seldepth': int, 'multipv': int, 'nodes': int, 'nps': int, 'time': int, 'score': list, 'pv': list}
 
@@ -362,13 +375,13 @@ class FairyGUI():
                     if button != '_move_' and all(',' in move for move in moves):
                         for move in moves:
                             # mark the allowed gating squares
-                            move = move.split(',')[1]
-                            to_sq = self.board.square2idx(move[-(2 + move[-2].isdigit()):])
-                            self.window[to_sq].update(button_color='orange')
+                            gating_sq = self.board.square2idx(Move(move).gating_sq())
+                            self.window[gating_sq].update(button_color='orange')
                         self.window[button].update(button_color='green')
                         return
                     moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
                 if moves:
+                    assert len(moves) == 1
                     self.current_selection = []
                     return moves[0]
             self.current_selection = []
@@ -378,12 +391,16 @@ class FairyGUI():
             moves = self.board.state.filter_legal(self.board.idx2square(button))
             if moves:
                 for move in moves:
-                    move = move.split(',')[0]  # support multi-leg moves
-                    to_sq = self.board.square2idx(move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())])
+                    to_sq = self.board.square2idx(Move(move).to_sq())
                     self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                 for move in moves:
-                    from_sq = self.board.square2idx(move[0: 2 + move[2].isdigit()])
-                    self.window[from_sq].update(button_color='cyan')
+                    try:
+                        from_sq = self.board.square2idx(Move(move).from_sq())
+                    except ValueError:
+                        # ignore missing pocket for freeDrops, e.g., in ataxx
+                        pass
+                    else:
+                        self.window[from_sq].update(button_color='cyan')
                 self.window[button].update(button_color='green')
                 self.current_selection.append(button)
 
