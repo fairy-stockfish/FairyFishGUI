@@ -249,19 +249,16 @@ class Board():
     @staticmethod
     def render_square(key):
         font_size = min(sg.Window.get_screen_size()) // 50
-        if key[0] != POCKET:
-            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
-            return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
-        else:
-            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
-            piece_count = sg.Text(size=(2, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=('count',) + key)
-            return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=('col',) + key))
-
+        font_size_sub = font_size // 2
+        layout = [sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)]
+        if key[0] == POCKET:
             # +---+---+---+---+
             # | P | N |   | R |
             # +---+---+---+---+ ...
             # | 3 | 1 |   | 2 |
-            # +---+---+---+---+                                        
+            # +---+---+---+---+
+            layout.append(sg.Text(size=(2, 1), pad=(0, 0), text_color='red', font='Any {}'.format(font_size_sub), key=('count',) + key))
+        return sg.pin(sg.Column([layout], pad=(0, 0), key=('col',) + key))
 
     def draw_board(self):
         board_layout = []
@@ -288,9 +285,9 @@ class Board():
                     col.update(visible=False)
                 else:
                     piece = char_board[i][j]
-                    piece_color = PIECE_COLORS[piece.islower()]
+                    text_color = PIECE_COLORS[piece_color(piece)]
                     square_color = SQUARE_COLORS[(i + j) % 2 if piece not in WALL_CHAR else 2]
-                    elem.update(text=piece if piece not in WALL_CHAR else '', button_color=(piece_color, square_color))
+                    elem.update(text=piece if piece not in WALL_CHAR else '', button_color=(text_color, square_color))
                     col.update(visible=True)
 
         # update pocket
@@ -303,12 +300,12 @@ class Board():
                 if i >= len(pieces):
                     col.update(visible=False)
                 else:  # type(pieces) = OrderedDict
-                    piece, piece_count = list(pieces.items())[i][0], list(pieces.items())[i][1]
+                    piece, piece_count = list(pieces.items())[i]
                     if piece_count > 0:
                         elem.update(text=piece, visible=True, button_color=(PIECE_COLORS[color], SQUARE_COLORS[3]))
                         num.update(piece_count, visible=True)
                         col.update(visible=True)
-                    else:	
+                    else:
                         elem.update(visible=False)
                         num.update(visible=False)
 
@@ -335,7 +332,8 @@ class FairyGUI():
         self.current_selection = []
         self.engine = None
         self.engine_thread = None
-        self.engine_settings = {'EvalFile': '', 'Threads': ''} 
+        # TODO: read defaults from uci output
+        self.engine_settings = {'EvalFile': '', 'Threads': ''}
 
         layout = [[sg.Menu(menu_def, tearoff=False)],
                   [sg.TabGroup([[sg.Tab('Board', board_tab)]], title_color='red'),
@@ -360,23 +358,19 @@ class FairyGUI():
     @staticmethod
     def engine_settings_panel():
         layout = [[sg.Text('Chose NNUE file:')],
-                  [sg.Input(), sg.FileBrowse(key='_nnue_', file_types=(('nnue file', '*.nnue'),))],
+                  [sg.Input(key='EvalFile'), sg.FileBrowse(key='_nnue_', target='EvalFile', file_types=(('nnue file', '*.nnue'),))],
                   [sg.Text('Threads: (The number of CPU threads used for searching)')],
-                  [sg.Input(key='_threads_')],
+                  [sg.Input(key='Threads')],
                   [sg.Button('OK')]]
         with closing(sg.Window('Optional Settings', layout).finalize()) as window:
             while True:
                 event, values = window.read()
                 if event == sg.WINDOW_CLOSED or event == 'OK':
-                    if values and (values['_nnue_'] or values['_threads_']):
-                        if values['_threads_'] and not values['_threads_'].isdigit():
+                    if values:
+                        if values['Threads'] and not values['Threads'].isdigit():
                             sg.popup_ok('Threads should be a positive integer')
                             continue
-                        else:
-                            for k in values:  # values might be NoneTypes
-                                if not values[k]:
-                                    values[k] = None
-                            return values
+                        return values
                     return
 
     def process_square(self, square_idx=None, force_move=False):
@@ -459,21 +453,16 @@ class FairyGUI():
         self.engine.position(self.board.state.start_fen, self.board.state.moves)
         self.engine.analyze()
 
-    def set_engine_option(self, nnue=None, threads=None):
-        if self.engine and not self.engine.paused and (nnue or threads):
+    def set_engine_options(self, options):
+        if self.engine and not self.engine.paused:
             self.engine.stop()
             self.engine.paused = False
-        if nnue:
-            if self.engine:
-                self.engine.setoption('EvalFile', nnue)
-            else:
-                self.engine_settings['EvalFile'] = nnue
-        if threads:
-            if self.engine:
-                self.engine.setoption('Threads', threads)
-            else:
-                self.engine_settings['Threads'] = threads
-        if self.engine and not self.engine.paused and (nnue or threads):
+        for key, value in options.items():
+            if key in self.engine_settings and value:
+                self.engine_settings[key] = value
+                if self.engine:
+                    self.engine.setoption(key, value)
+        if self.engine and not self.engine.paused:
             self.engine.analyze()
 
     def update_board(self, variant=None, fen=None, move=None, undo=False):
@@ -520,7 +509,7 @@ class FairyGUI():
             elif button == 'Engine Settings':
                 settings = self.engine_settings_panel()
                 if settings:
-                    self.set_engine_option(nnue=settings['_nnue_'], threads=settings['_threads_'])
+                    self.set_engine_options(settings)
             elif button == '_newgame_':
                 variant = self.popup(sg.Listbox, 'Variant', pyffish.variants(), size=(30, 20))
                 if variant:
