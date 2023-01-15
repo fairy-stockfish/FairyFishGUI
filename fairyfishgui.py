@@ -363,11 +363,12 @@ class FairyGUI():
     def process_square(self, square_idx=None, force_move=False):
         if square_idx:
             self.current_selection.append(square_idx)
+        squares = [self.board.idx2square(idx) for idx in self.current_selection]
+        moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
+                            + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
+        if square_idx:
             if len(self.current_selection) > 1:
                 # second, third, or fourth selection
-                squares = [self.board.idx2square(idx) for idx in self.current_selection]
-                moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
-                                    + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
                 if len(moves) > 1:
                     if all(',' in move for move in moves) and len(set(move.split(',')[1] for move in moves)) > 1:
                         self.window[square_idx].update(button_color='green')
@@ -379,8 +380,8 @@ class FairyGUI():
                         force_move = True
             else:
                 # first selection
-                moves = self.board.state.filter_legal(self.board.idx2square(square_idx))
                 if not moves:
+                    self.current_selection.clear()
                     return
                 for move in moves:
                     to_sq = self.board.square2idx(Move(move).to_sq())
@@ -484,7 +485,7 @@ class FairyGUI():
         if self.engine and not self.engine.paused and (variant or fen or move or undo):
             self.engine.analyze()
 
-        self.current_selection = []
+        self.current_selection.clear()
         self.board.state.update_pockets()
         self.board.update(self.window)
 
