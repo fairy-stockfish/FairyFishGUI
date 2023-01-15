@@ -422,8 +422,8 @@ class FairyGUI():
         if not moves:
             # reset
             self.update_board()
-        elif len(moves) == 1:
-            # make move if unique
+        elif len(moves) == 1 and (force_move or len(self.current_selection) != 1 or squares[0] != Move(moves[0]).from_sq):
+            # make move if unique (unless the clicked piece only has one move)
             self.update_board(move=moves[0])
         else:
             # wait for next selection
