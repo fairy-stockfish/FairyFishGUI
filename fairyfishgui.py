@@ -235,7 +235,7 @@ class Board():
             return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
         else:
             button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
-            piece_count = sg.Text(size=(1, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=('count',) + key)
+            piece_count = sg.Text(size=(2, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=('count',) + key)
             return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=('col',) + key))
 
             # +---+---+---+---+
