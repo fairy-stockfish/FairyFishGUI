@@ -12,7 +12,7 @@ import pyffish
 MAX_FILES = 12
 MAX_RANKS = 10
 WHITE, BLACK = 0, 1
-POCKETS = {WHITE: 'white_pocket', BLACK: 'black_pocket'}
+POCKET = 'pocket'
 SQUARE_COLORS = ('#F0D9B5', '#B58863', '#808080', '#9FB8AD')  # light, dark, wall, pocket
 PIECE_COLORS = ('white', 'black')
 WALL_CHAR = '*'
@@ -119,8 +119,9 @@ class GameState():
     def is_legal(self, move):
         return move in self.legal_moves()
 
-    def filter_legal(self, move):
-        return [m for m in self.legal_moves() if not move or (move in m and move + '0' not in m)]  # workaround for rank 10
+    def filter_legal(self, move, move2=''):
+        return [m for m in self.legal_moves() if (not move or (move in m and move + '0' not in m))  # workaround for rank 10
+                                              and m.endswith(move2)]
 
     def to_san(self, move=None):
         if move:
@@ -189,7 +190,7 @@ class GameState():
         pocket_counts = Counter(pocket_pieces[0] if pocket_pieces else '')
 
         for piece, count in pocket_counts.items():
-            self.pockets[piece_color(piece)][piece] = count
+            self.pockets[piece_color(piece)][piece.upper()] = count
 
 
 class Board():
@@ -201,22 +202,28 @@ class Board():
         return chr(ord('a') + file)
 
     def idx2square(self, index):
+        if type(index) is tuple and index and index[0] == POCKET:
+            # piece drop
+            return list(self.state.pockets[index[1]].keys())[index[2]] + '@'
         return '{}{}'.format(self.to_file(index[1]), self.state.ranks() - index[0])
 
     def square2idx(self, square):
+        if square[-1] == '@':
+            # piece drop
+            color = self.state.side_to_move()
+            return (POCKET, color, list(self.state.pockets[color].keys()).index(square[-2]))
         return (self.state.ranks() - int(square[1:]), ord(square[0]) - ord('a'))
 
     @staticmethod
-    def render_square(key, pocket_color=None):
+    def render_square(key):
         font_size = min(sg.Window.get_screen_size()) // 50
-        if pocket_color is None:
+        if key[0] != POCKET:
             button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
             return sg.pin(sg.Column([[button]], pad=(0, 0), key=('col',) + key))
         else:
-            pocket = POCKETS[pocket_color]
-            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=(pocket,) + key)
-            piece_count = sg.Text(size=(1, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=(pocket + '_count',) + key)
-            return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=(pocket + '_col',) + key))
+            button = sg.Button(size=(3, 2), pad=(0, 0), font='Any {}'.format(font_size), key=key)
+            piece_count = sg.Text(size=(1, 1), pad=(0, 0), text_color='red', font='Any {}'.format(12), key=('count',) + key)
+            return sg.pin(sg.Column([[button], [piece_count]], pad=(0, 0), key=('col',) + key))
 
             # +---+---+---+---+
             # | P | N |   | R |
@@ -236,11 +243,11 @@ class Board():
     def draw_pocket(self, pocket_color):
         pocket_layout = []
         for i in range(MAX_FILES):
-            pocket_layout.append(self.render_square(key=(i,), pocket_color=pocket_color))
+            pocket_layout.append(self.render_square(key=(POCKET, pocket_color, i,)))
         return pocket_layout
 
     def update(self, window):
-        self.current_selection = None
+        self.current_selection = []
         char_board = self.state.char_board()
         for i in range(MAX_RANKS):
             for j in range(MAX_FILES):
@@ -257,17 +264,17 @@ class Board():
 
         # update pocket
         for color, pieces in self.state.pockets.items():
-            pocket = POCKETS[color]
             for i in range(MAX_FILES):
-                elem = window[(pocket, i)]
-                num = window[(pocket + '_count', i)]
-                col = window[(pocket + '_col', i)]
+                key = (POCKET, color, i)
+                elem = window[key]
+                num = window[('count',) + key]
+                col = window[('col',) + key]
                 if i >= len(pieces):
                     col.update(visible=False)
-                else:		# type(pieces) = OrderedDict
+                else:  # type(pieces) = OrderedDict
                     piece, piece_count = list(pieces.items())[i][0], list(pieces.items())[i][1]
                     if piece_count > 0:
-                        elem.update(text=piece, visible=True, button_color=(PIECE_COLORS[piece.islower()], SQUARE_COLORS[3]))
+                        elem.update(text=piece, visible=True, button_color=(PIECE_COLORS[color], SQUARE_COLORS[3]))
                         num.update(piece_count, visible=True)
                         col.update(visible=True)
                     else:	
@@ -294,7 +301,7 @@ class FairyGUI():
 
         self.board = Board()
         board_tab = [[sg.Column([self.board.draw_pocket(BLACK)])], [sg.Column(self.board.draw_board())],[sg.Column([self.board.draw_pocket(WHITE)])]]
-        self.current_selection = None
+        self.current_selection = []
         self.engine = None
         self.engine_thread = None
         self.engine_settings = {'EvalFile': '', 'Threads': ''} 
@@ -343,54 +350,43 @@ class FairyGUI():
 
     def process_square(self, button):
         if self.current_selection or button == '_move_':
-            if button[0] in POCKETS.values():  # invalid click
-                self.current_selection = None
-                self.update_board()
-                return	
-            elif not self.current_selection:  # clicking on Move without selection
-                moves = self.board.state.filter_legal('')
-            elif self.current_selection[0] not in POCKETS.values():  # current_selection is (i,j)
-                squares = [self.board.idx2square(square) for square in (self.current_selection, button) if type(square) is tuple]
-                moves = list(set(self.board.state.filter_legal(''.join(squares))
-                                    + self.board.state.filter_legal(''.join(reversed(squares)))))	
-            else:  # current_selection is pocket piece
-                squares = [self.window[self.current_selection].get_text().upper() + '@', self.board.idx2square(button) if type(button) is tuple else '']
-                moves = self.board.state.filter_legal(''.join(squares))
-            self.current_selection = None
+            # second or third selection
+            self.current_selection.append(button)
+            squares = [self.board.idx2square(square) for square in self.current_selection if type(square) is tuple]
+            moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
+                                + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
 
             if len(moves) > 0:
                 if len(moves) > 1:
+                    # wait for third selection for multi-leg moves
+                    if all(',' in move for move in moves):
+                        for move in moves:
+                            # mark the allowed gating squares
+                            move = move.split(',')[1]
+                            to_sq = self.board.square2idx(move[-(2 + move[-2].isdigit()):])
+                            self.window[to_sq].update(button_color='orange')
+                        self.window[button].update(button_color='green')
+                        return
                     moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
                 if moves:
+                    self.current_selection = []
                     return moves[0]
+            self.current_selection = []
             self.update_board()
-
         else:
-            if button[0] not in POCKETS.values():  # button = (i,j)
-                moves = self.board.state.filter_legal(self.board.idx2square(button))
-                if moves:
-                    for move in moves:
-                        move = move.split(',')[0]  # support multi-leg moves
-                        to_sq = self.board.square2idx(move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())])
-                        self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
-                    for move in moves:
-                        if '@' not in move:
-                            to_sq = self.board.square2idx(move[0: 2 + move[2].isdigit()])
-                            self.window[to_sq].update(button_color='cyan')
-                    self.window[button].update(button_color='green')
-                    self.current_selection = button
-            else:  # button = ('...pocket', i)
-                if button[0] == POCKETS[self.board.state.side_to_move()]:  # as in UCI there's no difference between black or white for drop pieces
-                    piece = self.window[button].get_text().upper()
-                    moves = self.board.state.filter_legal(piece + '@')
-                    if moves:
-                        for move in moves:
-                            move = move.split(',')[0]  # support multi-leg moves
-                            to_sq = self.board.square2idx(move[2: len(move) - (not move[-1].isdigit())])
-                            self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
-                        self.window[button].update(button_color='green')
-                        self.current_selection = button
-                        
+            # first selection
+            moves = self.board.state.filter_legal(self.board.idx2square(button))
+            if moves:
+                for move in moves:
+                    move = move.split(',')[0]  # support multi-leg moves
+                    to_sq = self.board.square2idx(move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())])
+                    self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
+                for move in moves:
+                    from_sq = self.board.square2idx(move[0: 2 + move[2].isdigit()])
+                    self.window[from_sq].update(button_color='cyan')
+                self.window[button].update(button_color='green')
+                self.current_selection.append(button)
+
     def quit_engine(self):
         if self.engine:
             self.engine.quit()
