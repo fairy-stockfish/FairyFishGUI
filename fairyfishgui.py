@@ -359,7 +359,7 @@ class FairyGUI():
             if len(moves) > 0:
                 if len(moves) > 1:
                     # wait for third selection for multi-leg moves
-                    if all(',' in move for move in moves):
+                    if button != '_move_' and all(',' in move for move in moves):
                         for move in moves:
                             # mark the allowed gating squares
                             move = move.split(',')[1]
