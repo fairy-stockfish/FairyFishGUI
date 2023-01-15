@@ -22,17 +22,37 @@ def piece_color(piece):
     return piece.islower()
 
 
-class Move(str):
+class Move():
+    PATTERN = re.compile(r'(\+)?(?P<fromto>(?P<from>[A-Z]@|[a-z]\d+)(?P<to>[a-z]\d+))([a-z+-])?(,(?P<fromto2>(?P<from2>[a-z]\d+)(?P<to2>[a-z]\d+)))?')
+
+    def __init__(self, move):
+        self.match = self.PATTERN.fullmatch(move)
+
+    def contains(self, squares):
+        return not squares or (squares[0] in (self.from_sq, self.to_sq)
+            and (len(squares) < 2 or (squares[1] in (self.from_sq, self.to_sq) and (squares[0] != squares[1] or self.from_sq == self.to_sq))
+            and (len(squares) < 3 or squares[2] in (self.from_sq2, self.to_sq2)
+            and (len(squares) < 4 or squares[3] == self.to_sq2))))
+
+    @property
     def from_sq(self):
-        move = self.lstrip('+')
-        return move[0: 2 + move[2].isdigit()]
+        return self.match.group('from')
+
+    @property
     def to_sq(self):
-        move = self.lstrip('+').split(',')[0]  # support multi-leg moves
-        return move[2 + move[2].isdigit(): len(move) - (not move[-1].isdigit())]
-    def gating_sq(self):
-        assert ',' in self
-        move = self.split(',')[1]
-        return move[-(2 + move[-2].isdigit()):]
+        return self.match.group('to')
+
+    @property
+    def from_sq2(self):
+        return self.match.group('from2')
+
+    @property
+    def to_sq2(self):
+        return self.match.group('to2')
+
+    @property
+    def fromto2(self):
+        return self.match.group('fromto2')
 
 
 class Engine():
@@ -132,9 +152,8 @@ class GameState():
     def is_legal(self, move):
         return move in self.legal_moves()
 
-    def filter_legal(self, move, move2=''):
-        return [m for m in self.legal_moves() if (not move or (move in m.split(',')[0] and move + '0' not in m))  # workaround for rank 10
-                                              and (not move2 or move2 in m.split(',')[-1])]
+    def filter_legal(self, squares):
+        return [m for m in self.legal_moves() if Move(m).contains(squares)]
 
     def to_san(self, move=None):
         if move:
@@ -364,37 +383,36 @@ class FairyGUI():
         if square_idx:
             self.current_selection.append(square_idx)
         squares = [self.board.idx2square(idx) for idx in self.current_selection]
-        moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
-                            + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
+        moves = self.board.state.filter_legal(squares)
         if square_idx:
-            if len(self.current_selection) > 1:
-                # second, third, or fourth selection
-                if len(moves) > 1:
-                    if all(',' in move for move in moves) and len(set(move.split(',')[1] for move in moves)) > 1:
-                        self.window[square_idx].update(button_color='green')
-                        # mark selection for multi-leg moves
-                        for move in moves:
-                            gating_sq = self.board.square2idx(Move(move).gating_sq())
-                            self.window[gating_sq].update(button_color='orange')
-                    else:
-                        force_move = True
-            else:
-                # first selection
+            if len(self.current_selection) == 1:
+                # first square selection
                 if not moves:
                     self.current_selection.clear()
                     return
                 for move in moves:
-                    to_sq = self.board.square2idx(Move(move).to_sq())
+                    to_sq = self.board.square2idx(Move(move).to_sq)
                     self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
                 for move in moves:
                     try:
-                        from_sq = self.board.square2idx(Move(move).from_sq())
+                        from_sq = self.board.square2idx(Move(move).from_sq)
                     except ValueError:
                         # ignore missing pocket for freeDrops, e.g., in ataxx
                         pass
                     else:
                         self.window[from_sq].update(button_color='cyan')
                 self.window[square_idx].update(button_color='green')
+            elif len(moves) > 1:
+                # ambiguous second, third, or fourth selection
+                # is further disambiguation possible by selecting another square?
+                if all(',' in move for move in moves) and len(set(Move(move).fromto2 for move in moves)) > 1:
+                    self.window[square_idx].update(button_color='green')
+                    # mark selection for multi-leg moves
+                    for move in moves:
+                        to_sq2 = self.board.square2idx(Move(move).to_sq2)
+                        self.window[to_sq2].update(button_color='orange')
+                else:
+                    force_move = True
 
         # disambiguate moves
         if force_move and len(moves) > 1:
