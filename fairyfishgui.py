@@ -133,8 +133,8 @@ class GameState():
         return move in self.legal_moves()
 
     def filter_legal(self, move, move2=''):
-        return [m for m in self.legal_moves() if (not move or (move in m and move + '0' not in m))  # workaround for rank 10
-                                              and m.endswith(move2)]
+        return [m for m in self.legal_moves() if (not move or (move in m.split(',')[0] and move + '0' not in m))  # workaround for rank 10
+                                              and (not move2 or move2 in m.split(',')[-1])]
 
     def to_san(self, move=None):
         if move:
@@ -260,7 +260,6 @@ class Board():
         return pocket_layout
 
     def update(self, window):
-        self.current_selection = []
         char_board = self.state.char_board()
         for i in range(MAX_RANKS):
             for j in range(MAX_FILES):
@@ -361,35 +360,28 @@ class FairyGUI():
                             return values
                     return
 
-    def process_square(self, button):
-        if self.current_selection or button == '_move_':
-            # second or third selection
-            self.current_selection.append(button)
-            squares = [self.board.idx2square(square) for square in self.current_selection if type(square) is tuple]
-            moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
-                                + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
-
-            if len(moves) > 0:
+    def process_square(self, square_idx=None, force_move=False):
+        if square_idx:
+            self.current_selection.append(square_idx)
+            if len(self.current_selection) > 1:
+                # second, third, or fourth selection
+                squares = [self.board.idx2square(idx) for idx in self.current_selection]
+                moves = list(set(self.board.state.filter_legal(''.join(squares[:2]), ''.join(squares[2:]))
+                                    + self.board.state.filter_legal(''.join(reversed(squares[:2])), ''.join(squares[2:]))))
                 if len(moves) > 1:
-                    # wait for third selection for multi-leg moves
-                    if button != '_move_' and all(',' in move for move in moves):
+                    if all(',' in move for move in moves) and len(set(move.split(',')[1] for move in moves)) > 1:
+                        self.window[square_idx].update(button_color='green')
+                        # mark selection for multi-leg moves
                         for move in moves:
-                            # mark the allowed gating squares
                             gating_sq = self.board.square2idx(Move(move).gating_sq())
                             self.window[gating_sq].update(button_color='orange')
-                        self.window[button].update(button_color='green')
-                        return
-                    moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
-                if moves:
-                    assert len(moves) == 1
-                    self.current_selection = []
-                    return moves[0]
-            self.current_selection = []
-            self.update_board()
-        else:
-            # first selection
-            moves = self.board.state.filter_legal(self.board.idx2square(button))
-            if moves:
+                    else:
+                        force_move = True
+            else:
+                # first selection
+                moves = self.board.state.filter_legal(self.board.idx2square(square_idx))
+                if not moves:
+                    return
                 for move in moves:
                     to_sq = self.board.square2idx(Move(move).to_sq())
                     self.window[to_sq].update(button_color='yellow' if self.window[to_sq].get_text().isspace() else 'red')
@@ -401,8 +393,22 @@ class FairyGUI():
                         pass
                     else:
                         self.window[from_sq].update(button_color='cyan')
-                self.window[button].update(button_color='green')
-                self.current_selection.append(button)
+                self.window[square_idx].update(button_color='green')
+
+        # disambiguate moves
+        if force_move and len(moves) > 1:
+            moves = self.popup(sg.Listbox, 'Choose move', moves, size=(20, 10))
+
+        # update board depending on selection
+        if not moves:
+            # reset
+            self.update_board()
+        elif len(moves) == 1:
+            # make move if unique
+            self.update_board(move=moves[0])
+        else:
+            # wait for next selection
+            assert not force_move
 
     def quit_engine(self):
         if self.engine:
@@ -478,6 +484,7 @@ class FairyGUI():
         if self.engine and not self.engine.paused and (variant or fen or move or undo):
             self.engine.analyze()
 
+        self.current_selection = []
         self.board.state.update_pockets()
         self.board.update(self.window)
 
@@ -521,10 +528,11 @@ class FairyGUI():
             elif button == '_toggle_':
                 if self.engine:
                     self.engine.toggle()
-            elif type(button) is tuple or button == '_move_':
-                move = self.process_square(button)
-                if move:
-                    self.update_board(move=move)	
+            elif type(button) is tuple:
+                self.process_square(button)
+            elif button == '_move_':
+                self.process_square(force_move=True)
+
 
 if __name__ == '__main__':
     FairyGUI().run()
