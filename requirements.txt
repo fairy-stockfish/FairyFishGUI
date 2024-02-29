@@ -1,2 +1,2 @@
-PySimpleGUI
+PySimpleGUI<5.0.0
 pyffish
